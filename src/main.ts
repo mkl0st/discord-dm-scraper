@@ -1,9 +1,12 @@
+import { prepareOutputDirectory, downloadFile } from './utils/file';
+
 interface Attachment {
   id: string;
   filename: string;
   size: number;
   url: string;
   proxy_url: string;
+  content_type: string | null;
 }
 
 interface Message {
@@ -42,17 +45,22 @@ const getAuthorNickFromAuthorId = (authorId: string): string => {
 }
 
 (async () => {
+  prepareOutputDirectory();
+
   const messages = (await getAPIData<Message[]>(
     `/channels/${Bun.env.DM_CHANNEL_ID}/messages?after=${Bun.env.FIRST_MESSAGE_ID}&limit=${Bun.env.MESSAGE_LIMIT}`,
   )).reverse();
-  messages.forEach((message) => {
+
+  for (const message of messages) {
     const nick = getAuthorNickFromAuthorId(message.author.id);
     if (message.content) {
       console.log(`[${formatTimestamp(message.timestamp)}][${nick}] ${message.content}`);
     }
-    message.attachments?.forEach((attachment) => {
-      console.log(`[${formatTimestamp(message.timestamp)}][${nick}] <${message.id}_${attachment.filename}>`);
-      return;
-    });
-  });
+    if (message.attachments) {
+      for (const attachment of message.attachments) {
+        console.log(`[${formatTimestamp(message.timestamp)}][${nick}] ${attachment.content_type || ''} <${message.id}_${attachment.filename}>`);
+        await downloadFile(attachment.proxy_url, `${message.id}_${attachment.filename}`, attachment.content_type || '');
+      }
+    }
+  }
 })();
